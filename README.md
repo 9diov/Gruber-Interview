@@ -96,6 +96,11 @@ accessing a global variable in any request coming in. As other web frameworks al
 
 Specifically, since Twisted run all of our handlers in a single thread, coupled with Python's GIL, means we can safely use a share memory model without the normal concern of race conditions.
 
+# How to run the code 
+- Install pip and python2.7 (twisted doesn't work on python3, at least not for the part I used)
+- `pip install -r requirements.txt`
+- `python src/main.py`
+
 # When the driver's phone crashed
 
 It is possible for a driver phone to suddenly stopped working while his state is available. When this happens, the driver is effectively inactive to us. To handle this, I will also track the timestamp of the last coordinate
