@@ -1,4 +1,6 @@
-The code is gonna use Python, Flask, Postgres, Redis. This is fairly standard choice in the python stack.
+The code is gonna use Python, Twisted and SQLite. Twisted is an event-driven networking engine, and is used because we need an in memory data store server. Normally my SQL database of choice is Postgres, SQLite3 is used here
+to remove the need for a separate DB instance.
+
 The final code will be very simple, using just the most naive implementation possible. Although I will go in some details on how to scale as well as justification on how the naive implementation can scale up.
 
 # Requirement
@@ -57,6 +59,18 @@ There is also a fast algorithm to find all the rectangles needed to fill a given
 
 Note that since the Earth is a sphere, those rectangles will have different size. However, the difference should still be smaller than the variations in cities' sizes.
 
+# Services topology
+
+In essence, we will have a cluster of geolocation index shards (and their replicas) alongs with multiple instances of other services that can use them (dispatching service would be one of those).
+One big remaining question would be topology of the network of services: which services are communicating with one another, and how should they be discovered.
+
+Take the aforementioned indexes, we can treat the cluster of geolocation indexes as a blackbox, and any outsider services would need to only know about one of the nodes in the cluster. Any node can redirect a request to the correct index node in the cluster. This has the disadvantage of small overhead (due to redirection). But it would be much simpler to interface with
+
+The other option is having any service that needs to interact with the index learning about all nodes in the cluster. While reducing the redirection, this has a huge cons of having to bundle the sharding algorithm with those services.
+It is likely to cause a lot of difficulties if we want to change how we shard our index.
+
+I don't know if one option is better than the other
+
 
 # Implementation of a node
 
@@ -64,17 +78,30 @@ In a proper implementation, we would have one dispatching process talking to a c
 
 For the actual implementation of the test, I will assume here we are just implementing one node of the indexing.
 The driver location is ephemeral data. We will call it the driver's index. Since we don't need to persist it, an indexing process can keep the data in memory and 5k request/ second is fairly straightforward. 
-We need a data structure that will have fast read/ write. We can use a dynamically sized array and assign every driver a slot in the array when they set their states to available. Removing the data of a driver, or 
-updating their data is O(1), finding an empty slot would scale linearly with the number of currently active drivers O(n), but that computation should be done rarely. Although this design choice might cause an issue if drivers 
-are moving across the shard's boundary frequently, which results in the need to scan through the array too many times. If that's the case, we can use a hashtable instead.
+I will just use a simple python dictionary to store the coordinates of our drivers, and a set to store the list of available drivers
+- I ran a small micro benchmark on my laptop. Updating a python dict can get upto 10k operation/secs, that should not be a problem for us.
 
-Again, for simplicity of the test, instead of implement a separate process for the index, I will just use Redis to store the data. 
-The key being driver's ID, and the value being his location. The key is set to expire after a minute - this would be our failure case: the driver's
-phone just suddenly went dark without the driver signing out.
-We also need to store the status of the driver, or alternatively, we can store the list of active drivers in this node. A Redis's SET is used to store the active drivers, the key would be our node's ID.
+There is also no limit on the pickup range, it will just return 5 nearest drivers. 
 
-To summarize, I will just implement a very simple system that looks up all the available drivers and find the closest one. In a sense, this bypasses all the requirements to "design with scaling in mind". 
+To summarize, I implemented a very simple system that looks up all the available drivers and find the closest one. In a sense, this bypasses all the requirements to "design with scaling in mind". 
 Unfortunately I don't see a way to implement the sharding or the more interesting design for scaling within a resonable timeframe for the test.
+
+Only very basic input checking is implemented. There is no check on whether a user actually exists when doing an action (as we would need a proper authentication scheme for it).
+
+## Why twisted 
+Just in case you are not familiar with twisted, it provides the event-loop async model similar to node in Python.
+
+In a proper implementation, we will have the dispatching service and the driver's index running in two different processes. However in this implementation, both of them are running in the same process. This results in the need of 
+accessing a global variable in any request coming in. As other web frameworks always sandbox the request (for good reasons), Twisted is one of the few available choices
+
+Specifically, since Twisted run all of our handlers in a single thread, coupled with Python's GIL, means we can safely use a share memory model without the normal concern of race conditions.
+
+# When the driver's phone crashed
+
+It is possible for a driver phone to suddenly stopped working while his state is available. When this happens, the driver is effectively inactive to us. To handle this, I will also track the timestamp of the last coordinate
+update, and ignore any driver with an update too long ago (300 seconds in the toy implementation). 
+
+Ideally, we will have a task that periodically run and remove all the inactive drivers from available. This is not implemented.
 
 # What's needed for a fully functional simple Uber?
 

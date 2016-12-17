@@ -24,7 +24,6 @@ class DriverResource(resource.Resource):
             request.setResponseCode(400)
             return "Bad request"
 
-    # Assuming good request
     def render_PUT(self, request):
         try:
             path = request.postpath
