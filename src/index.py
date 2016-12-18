@@ -35,7 +35,8 @@ class DriverIndex(object):
         driver_info = self.driver_info
         # Filtering driver with coordinate data that is recent
         available_driver = [v for v in self.available_driver
-                            if driver_info[v][2] > (current_time - 300)]
+                            if (driver_info.get(v) is not None) and
+                            (driver_info[v][2] > (current_time - 300))]
 
         # Sort the driver by cartesian distance to the given longtitude and latitude
         # The optimal way to do is O(n), having to loop through the list just one
