@@ -93,6 +93,8 @@ Unfortunately I don't see a way to implement the sharding or the more interestin
 
 Only very basic input checking is implemented. There is no check on whether a user actually exists when doing an action (as we would need a proper authentication scheme for it).
 
+There are only two SQL tables, one for drivers and one for passengers. As it stands, there are little differences between one table for both type of users, or two different tables. Considering the case with only two kind of users, I choose the two separate table choice as there should be magnitudes more passengers than drivers. 
+
 ## Why twisted 
 Just in case you are not familiar with twisted, it provides the event-loop async model similar to node for Python.
 
